@@ -22,22 +22,26 @@ fi
 echo "Fetching the ${TARGET} ip..."
 
 ip=$(getent hosts "${TARGET}" | awk '{ print $1 }')
+echo "${ip}" > /tmp/TARGET_IP
 
 if [ -z "${ip}" ]; then
     echo "Unable to find the ${TARGET} ip"
     exit 2
 fi
 
-echo "Target : ${TARGET} (ip: $ip)"
+echo "Target : ${TARGET} (ip: $ip), Port: ${TARGET_PORT}"
 
-iptables -F
+nc -w 3 -vz ${TARGET} ${TARGET_PORT}
+if [ $? -ne 0 ]; then
+    echo -e "\nUnable to access the ${TARGET}:${TARGET_PORT} port"
+    exit 2
+fi
+
+iptables -L &>/dev/null
 if [ $? -ne 0 ]; then
     echo -e "\nYou must run this container with the --cap-add=NET_ADMIN option (or the --privileged one)."
     exit 1
 fi
-
-iptables -t nat -F
-iptables -t mangle -F
 
 iptables -t nat -A PREROUTING -p tcp -i eth0 --dport ${TARGET_PORT} -j DNAT --to ${ip}:${TARGET_PORT}
 iptables -A FORWARD -p tcp -i eth0 --dport ${TARGET_PORT} -j ACCEPT
